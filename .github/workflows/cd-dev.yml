@@ -1,0 +1,48 @@
+name: Deploy to Development
+
+on:
+  push:
+    branches: [develop, 'feature/**']
+  workflow_dispatch:
+
+env:
+  ENVIRONMENT: dev
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  deploy-dev:
+    name: Deploy to Dev Environment
+    runs-on: ubuntu-latest
+    environment:
+      name: development
+      url: https://dev.matching-engine.example.com
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      
+      - name: Set Image Tag
+        id: image
+        run: |
+          IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}-${{ github.sha }}"
+          echo "tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+      
+      - name: Deploy with Docker Compose (Dev)
+        run: |
+          echo "Deploying to development environment..."
+          echo "Image: ${{ steps.image.outputs.tag }}"
+          # Add actual deployment commands here
+          # For local dev, you might use docker-compose
+          # For cloud, use kubectl/helm commands
+      
+      - name: Run Smoke Tests
+        run: |
+          echo "Running smoke tests..."
+          # Add smoke test commands
+          # curl -f http://dev-endpoint/health || exit 1
+      
+      - name: Post Deployment Info
+        run: |
+          echo "🚀 Deployed to Development"
+          echo "Image: ${{ steps.image.outputs.tag }}"

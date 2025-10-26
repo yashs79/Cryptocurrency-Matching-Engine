@@ -1,0 +1,63 @@
+groups:
+  - name: matching_engine_alerts
+    interval: 30s
+    rules:
+      # High error rate alert
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value }} (threshold: 0.05)"
+
+      # High latency alert
+      - alert: HighLatency
+        expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High latency detected"
+          description: "P99 latency is {{ $value }}s (threshold: 1s)"
+
+      # Order matching latency
+      - alert: HighOrderMatchingLatency
+        expr: histogram_quantile(0.99, rate(order_matching_duration_seconds_bucket[5m])) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High order matching latency"
+          description: "P99 order matching latency is {{ $value }}s (threshold: 10ms)"
+
+      # Service down
+      - alert: ServiceDown
+        expr: up{job="matching-engine"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Matching engine is down"
+          description: "Matching engine has been down for more than 1 minute"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: process_resident_memory_bytes / 1024 / 1024 / 1024 > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}GB (threshold: 2GB)"
+
+      # Order book depth anomaly
+      - alert: OrderBookDepthAnomaly
+        expr: order_book_depth < 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low order book depth"
+          description: "Order book depth is {{ $value }} (threshold: 10)"
