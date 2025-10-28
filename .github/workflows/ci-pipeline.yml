@@ -498,15 +498,19 @@ jobs:
           poetry run pip install -e .
       
       - name: Verify Test Files
+        env:
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           echo "📁 Checking test files..."
           ls -la tests/performance/
           echo "🔍 Verifying imports..."
           poetry run python -c "from src.matching_engine.core import MatchingEngine; print('✅ Imports working')"
           echo "🔍 Collecting tests..."
-          poetry run pytest tests/performance/ --collect-only -v || echo "Collection failed"
+          poetry run pytest tests/performance/ --collect-only -v
       
       - name: Run Performance Benchmarks
+        env:
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           echo "⚡ Running performance benchmarks..."
           poetry run pytest tests/performance/ -v --benchmark-json=benchmark-results.json --tb=short
