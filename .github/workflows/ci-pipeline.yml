@@ -499,11 +499,11 @@ jobs:
       - name: Run Performance Benchmarks
         run: |
           echo "⚡ Running performance benchmarks..."
-          poetry run pytest tests/performance/ -v --benchmark-only --benchmark-json=benchmark-results.json
-        continue-on-error: true
+          poetry run pytest tests/performance/ -v --benchmark-json=benchmark-results.json
       
       - name: Store Benchmark Results
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: benchmark-results
           path: benchmark-results.json
