@@ -79,6 +79,31 @@ def get_git_remote_info():
     except subprocess.CalledProcessError:
         return None, None
 
+def get_render_owner_id():
+    """Fetch Render Owner ID from API"""
+    api_key = os.getenv('RENDER_API_KEY')
+    
+    headers = {
+        'Authorization': f'Bearer {api_key}',
+        'Content-Type': 'application/json'
+    }
+    
+    try:
+        response = requests.get(
+            'https://api.render.com/v1/owners',
+            headers=headers
+        )
+        
+        if response.status_code == 200:
+            owners = response.json()
+            if owners and len(owners) > 0:
+                owner_id = owners[0]['owner']['id']
+                return owner_id
+        return None
+    except Exception as e:
+        print_error(f"Failed to fetch owner ID: {e}")
+        return None
+
 def check_env_vars():
     """Check if required environment variables are set"""
     print_step("Checking environment variables...")
@@ -126,6 +151,18 @@ def check_env_vars():
             print_warning(f"{var} not set - {description}")
     
     print_success("All required environment variables are set")
+    
+    # Auto-fetch Render Owner ID
+    if not os.getenv('RENDER_OWNER_ID'):
+        print_step("Fetching Render Owner ID...")
+        owner_id = get_render_owner_id()
+        if owner_id:
+            os.environ['RENDER_OWNER_ID'] = owner_id
+            print_success(f"Auto-detected Render Owner ID: {owner_id}")
+        else:
+            print_error("Failed to fetch Render Owner ID")
+            print("Please add RENDER_OWNER_ID to your .env file")
+            sys.exit(1)
 
 def create_render_service(service_config):
     """Create a Render service"""
@@ -230,23 +267,32 @@ def setup_development_environment():
     
     github_username = os.getenv('GITHUB_USERNAME')
     github_repo = os.getenv('GITHUB_REPO')
+    owner_id = os.getenv('RENDER_OWNER_ID')
     
     service_config = {
         'type': 'web_service',
         'name': 'matching-engine-dev',
-        'ownerId': os.getenv('RENDER_OWNER_ID'),  # Optional
-        'repo': f'https://github.com/{github_username}/{github_repo}',
+        'ownerId': owner_id,
+        'serviceDetails': {
+            'env': 'docker',
+            'envSpecificDetails': {
+                'dockerfilePath': './Dockerfile',
+                'dockerContext': '.'
+            },
+            'healthCheckPath': '/health',
+            'plan': 'starter',
+            'pullRequestPreviewsEnabled': 'no',
+            'region': 'oregon',
+            'envVars': [
+                {'key': 'ENVIRONMENT', 'value': 'development'},
+                {'key': 'LOG_LEVEL', 'value': 'DEBUG'},
+                {'key': 'API_HOST', 'value': '0.0.0.0'},
+                {'key': 'API_PORT', 'value': '8000'}
+            ]
+        },
+        'autoDeploy': 'yes',
         'branch': 'dev',
-        'runtime': 'docker',
-        'dockerfilePath': './Dockerfile',
-        'plan': 'free',
-        'healthCheckPath': '/health',
-        'envVars': [
-            {'key': 'ENVIRONMENT', 'value': 'development'},
-            {'key': 'LOG_LEVEL', 'value': 'DEBUG'},
-            {'key': 'API_HOST', 'value': '0.0.0.0'},
-            {'key': 'API_PORT', 'value': '8000'}
-        ]
+        'repo': f'https://github.com/{github_username}/{github_repo}'
     }
     
     service = create_render_service(service_config)
@@ -269,23 +315,32 @@ def setup_production_environment():
     
     github_username = os.getenv('GITHUB_USERNAME')
     github_repo = os.getenv('GITHUB_REPO')
+    owner_id = os.getenv('RENDER_OWNER_ID')
     
     service_config = {
         'type': 'web_service',
         'name': 'matching-engine',
-        'ownerId': os.getenv('RENDER_OWNER_ID'),  # Optional
-        'repo': f'https://github.com/{github_username}/{github_repo}',
+        'ownerId': owner_id,
+        'serviceDetails': {
+            'env': 'docker',
+            'envSpecificDetails': {
+                'dockerfilePath': './Dockerfile',
+                'dockerContext': '.'
+            },
+            'healthCheckPath': '/health',
+            'plan': 'starter',
+            'pullRequestPreviewsEnabled': 'no',
+            'region': 'oregon',
+            'envVars': [
+                {'key': 'ENVIRONMENT', 'value': 'production'},
+                {'key': 'LOG_LEVEL', 'value': 'INFO'},
+                {'key': 'API_HOST', 'value': '0.0.0.0'},
+                {'key': 'API_PORT', 'value': '8000'}
+            ]
+        },
+        'autoDeploy': 'yes',
         'branch': 'main',
-        'runtime': 'docker',
-        'dockerfilePath': './Dockerfile',
-        'plan': 'starter',
-        'healthCheckPath': '/health',
-        'envVars': [
-            {'key': 'ENVIRONMENT', 'value': 'production'},
-            {'key': 'LOG_LEVEL', 'value': 'INFO'},
-            {'key': 'API_HOST', 'value': '0.0.0.0'},
-            {'key': 'API_PORT', 'value': '8000'}
-        ]
+        'repo': f'https://github.com/{github_username}/{github_repo}'
     }
     
     service = create_render_service(service_config)

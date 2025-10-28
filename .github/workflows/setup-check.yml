@@ -9,8 +9,6 @@ jobs:
   auto-setup:
     name: Auto Setup Deployment (First Time)
     runs-on: ubuntu-latest
-    # Only run if secrets don't exist
-    if: ${{ secrets.RENDER_DEPLOY_HOOK_DEV == '' || secrets.RENDER_DEPLOY_HOOK_PROD == '' }}
     
     steps:
       - name: Checkout Code
