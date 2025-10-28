@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ${{ github.ref_name == 'main' && 'production' || 'development' }}
-      url: ${{ github.ref_name == 'main' && 'https://matching-engine.onrender.com' || 'https://dev.matching-engine.onrender.com' }}
+      url: ${{ github.ref_name == 'main' && 'https://matching-engine.onrender.com' || 'https://cryptocurrency-matching-engine.onrender.com' }}
     
     steps:
       - name: Checkout Code
@@ -32,7 +32,7 @@ jobs:
           else
             echo "environment=development" >> $GITHUB_OUTPUT
             echo "deploy_hook=${{ secrets.RENDER_DEPLOY_HOOK_DEV }}" >> $GITHUB_OUTPUT
-            echo "app_url=https://dev.matching-engine.onrender.com" >> $GITHUB_OUTPUT
+            echo "app_url=https://cryptocurrency-matching-engine.onrender.com" >> $GITHUB_OUTPUT
             echo "env_name=Development" >> $GITHUB_OUTPUT
           fi
       
