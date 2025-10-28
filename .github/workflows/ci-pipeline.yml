@@ -505,8 +505,10 @@ jobs:
           ls -la tests/performance/
           echo "🔍 Verifying imports..."
           poetry run python -c "from src.matching_engine.core import MatchingEngine; print('✅ Imports working')"
-          echo "🔍 Collecting tests..."
-          poetry run pytest tests/performance/ --collect-only -v
+          echo "🔍 Checking Python can import test file..."
+          poetry run python -c "import tests.performance.benchmark_matching_engine; print('✅ Test file imports')"
+          echo "🔍 Collecting tests with debug..."
+          poetry run pytest tests/performance/benchmark_matching_engine.py --collect-only -vv --tb=short
       
       - name: Run Performance Benchmarks
         env:
