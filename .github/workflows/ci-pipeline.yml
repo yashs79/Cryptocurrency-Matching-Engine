@@ -99,9 +99,7 @@ jobs:
       - name: Run Phase 1 Unit Tests
         run: |
           echo "🧪 Running Phase 1 Core Engine Tests..."
-          poetry run pytest tests/unit/test_order.py -v --tb=short --cov=src/matching_engine/core/order --cov-report=xml:coverage-phase1-order.xml
-          poetry run pytest tests/unit/test_order_book.py -v --tb=short --cov=src/matching_engine/core/order_book --cov-report=xml:coverage-phase1-orderbook.xml
-          poetry run pytest tests/unit/test_matching_engine.py -v --tb=short --cov=src/matching_engine/core/matching_engine --cov-report=xml:coverage-phase1-engine.xml
+          poetry run pytest tests/unit/test_order.py tests/unit/test_order_book.py tests/unit/test_matching_engine.py -v --tb=short --cov=src/matching_engine/core --cov-report=xml:coverage-phase1.xml --cov-report=term
       
       - name: Run Phase 1 Integration Tests
         run: |
@@ -111,9 +109,10 @@ jobs:
       - name: Upload Phase 1 Coverage
         uses: codecov/codecov-action@v3
         with:
-          files: ./coverage-phase1-*.xml
+          files: ./coverage-phase1.xml
           flags: phase1
           name: phase1-coverage
+        continue-on-error: true
       
       - name: Store Phase 1 Test Results
         uses: actions/upload-artifact@v4
@@ -121,8 +120,9 @@ jobs:
         with:
           name: phase1-test-results
           path: |
-            coverage-phase1-*.xml
-            .pytest_cache/
+            coverage-phase1.xml
+            .coverage
+        continue-on-error: true
 
   phase2-order-management-tests:
     name: Phase 2 - Order Management Tests
@@ -182,6 +182,7 @@ jobs:
           files: ./coverage-phase2.xml
           flags: phase2
           name: phase2-coverage
+        continue-on-error: true
 
   phase3-api-tests:
     name: Phase 3 - API Layer Tests
