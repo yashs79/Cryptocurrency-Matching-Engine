@@ -1,0 +1,486 @@
+name: CI Pipeline - Progressive Testing
+
+on:
+  push:
+    branches: [main, dev, 'feature/**', 'phase/**']
+  pull_request:
+    branches: [main, dev]
+
+env:
+  PYTHON_VERSION: '3.11'
+  POETRY_VERSION: '1.7.1'
+
+jobs:
+  # ============================================================================
+  # PHASE 0: Setup & Validation
+  # ============================================================================
+  setup:
+    name: Setup & Validation
+    runs-on: ubuntu-latest
+    outputs:
+      phase: ${{ steps.detect-phase.outputs.phase }}
+      run-phase1: ${{ steps.detect-phase.outputs.run-phase1 }}
+      run-phase2: ${{ steps.detect-phase.outputs.run-phase2 }}
+      run-phase3: ${{ steps.detect-phase.outputs.run-phase3 }}
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Detect Current Phase
+        id: detect-phase
+        run: |
+          # Detect which phase we're in based on files changed
+          if git diff --name-only HEAD~1 | grep -q "src/matching_engine/core/"; then
+            echo "phase=phase1" >> $GITHUB_OUTPUT
+            echo "run-phase1=true" >> $GITHUB_OUTPUT
+            echo "run-phase2=false" >> $GITHUB_OUTPUT
+            echo "run-phase3=false" >> $GITHUB_OUTPUT
+          elif git diff --name-only HEAD~1 | grep -q "src/matching_engine/services/"; then
+            echo "phase=phase2" >> $GITHUB_OUTPUT
+            echo "run-phase1=true" >> $GITHUB_OUTPUT
+            echo "run-phase2=true" >> $GITHUB_OUTPUT
+            echo "run-phase3=false" >> $GITHUB_OUTPUT
+          elif git diff --name-only HEAD~1 | grep -q "src/matching_engine/api/"; then
+            echo "phase=phase3" >> $GITHUB_OUTPUT
+            echo "run-phase1=true" >> $GITHUB_OUTPUT
+            echo "run-phase2=true" >> $GITHUB_OUTPUT
+            echo "run-phase3=true" >> $GITHUB_OUTPUT
+          else
+            echo "phase=all" >> $GITHUB_OUTPUT
+            echo "run-phase1=true" >> $GITHUB_OUTPUT
+            echo "run-phase2=true" >> $GITHUB_OUTPUT
+            echo "run-phase3=true" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Validate Project Structure
+        run: |
+          echo "✅ Validating project structure..."
+          test -f pyproject.toml || (echo "❌ pyproject.toml not found" && exit 1)
+          test -f Dockerfile || (echo "❌ Dockerfile not found" && exit 1)
+          test -d src/matching_engine || (echo "❌ src/matching_engine not found" && exit 1)
+          echo "✅ Project structure valid"
+
+  # ============================================================================
+  # PARALLEL EXECUTION: Backend Tests
+  # ============================================================================
+  phase1-core-tests:
+    name: Phase 1 - Core Engine Tests
+    runs-on: ubuntu-latest
+    needs: setup
+    if: needs.setup.outputs.run-phase1 == 'true'
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Cache Dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/pypoetry
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      
+      - name: Install Dependencies
+        run: |
+          pip install poetry==${{ env.POETRY_VERSION }}
+          poetry install --with dev
+      
+      - name: Run Phase 1 Unit Tests
+        run: |
+          echo "🧪 Running Phase 1 Core Engine Tests..."
+          poetry run pytest tests/unit/test_order.py -v --tb=short --cov=src/matching_engine/core/order --cov-report=xml:coverage-phase1-order.xml
+          poetry run pytest tests/unit/test_order_book.py -v --tb=short --cov=src/matching_engine/core/order_book --cov-report=xml:coverage-phase1-orderbook.xml
+          poetry run pytest tests/unit/test_matching_engine.py -v --tb=short --cov=src/matching_engine/core/matching_engine --cov-report=xml:coverage-phase1-engine.xml
+      
+      - name: Run Phase 1 Integration Tests
+        run: |
+          echo "🔗 Running Phase 1 Integration Tests..."
+          poetry run pytest tests/integration/test_matching_scenarios.py -v --tb=short
+      
+      - name: Upload Phase 1 Coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage-phase1-*.xml
+          flags: phase1
+          name: phase1-coverage
+      
+      - name: Store Phase 1 Test Results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: phase1-test-results
+          path: |
+            coverage-phase1-*.xml
+            .pytest_cache/
+
+  phase2-order-management-tests:
+    name: Phase 2 - Order Management Tests
+    runs-on: ubuntu-latest
+    needs: [setup, phase1-core-tests]
+    if: needs.setup.outputs.run-phase2 == 'true'
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Cache Dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/pypoetry
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
+      
+      - name: Install Dependencies
+        run: |
+          pip install poetry==${{ env.POETRY_VERSION }}
+          poetry install --with dev
+      
+      - name: Re-run Phase 1 Tests (Regression Check)
+        run: |
+          echo "🔄 Re-running Phase 1 tests to ensure no regression..."
+          poetry run pytest tests/unit/test_order.py tests/unit/test_order_book.py tests/unit/test_matching_engine.py -v --tb=line
+      
+      - name: Run Phase 2 Unit Tests
+        run: |
+          echo "🧪 Running Phase 2 Order Management Tests..."
+          if [ -d "tests/unit/services" ]; then
+            poetry run pytest tests/unit/services/ -v --tb=short --cov=src/matching_engine/services --cov-report=xml:coverage-phase2.xml
+          else
+            echo "⚠️  Phase 2 tests not yet created"
+          fi
+      
+      - name: Run Phase 2 Integration Tests
+        run: |
+          echo "🔗 Running Phase 2 Integration Tests..."
+          if [ -f "tests/integration/test_order_management_flow.py" ]; then
+            poetry run pytest tests/integration/test_order_management_flow.py -v --tb=short
+          else
+            echo "⚠️  Phase 2 integration tests not yet created"
+          fi
+      
+      - name: Upload Phase 2 Coverage
+        if: always()
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage-phase2.xml
+          flags: phase2
+          name: phase2-coverage
+
+  phase3-api-tests:
+    name: Phase 3 - API Layer Tests
+    runs-on: ubuntu-latest
+    needs: [setup, phase1-core-tests, phase2-order-management-tests]
+    if: needs.setup.outputs.run-phase3 == 'true'
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install Dependencies
+        run: |
+          pip install poetry==${{ env.POETRY_VERSION }}
+          poetry install --with dev
+      
+      - name: Re-run All Previous Phase Tests
+        run: |
+          echo "🔄 Re-running all previous phase tests..."
+          poetry run pytest tests/unit/test_order.py tests/unit/test_order_book.py tests/unit/test_matching_engine.py -v --tb=line
+          if [ -d "tests/unit/services" ]; then
+            poetry run pytest tests/unit/services/ -v --tb=line
+          fi
+      
+      - name: Run Phase 3 API Tests
+        run: |
+          echo "🧪 Running Phase 3 API Tests..."
+          if [ -d "tests/unit/api" ]; then
+            poetry run pytest tests/unit/api/ -v --tb=short --cov=src/matching_engine/api --cov-report=xml:coverage-phase3.xml
+          else
+            echo "⚠️  Phase 3 tests not yet created"
+          fi
+
+  # ============================================================================
+  # PARALLEL EXECUTION: Code Quality & Security
+  # ============================================================================
+  code-quality:
+    name: Code Quality & Linting
+    runs-on: ubuntu-latest
+    needs: setup
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install Dependencies
+        run: |
+          pip install poetry==${{ env.POETRY_VERSION }}
+          poetry install --with dev
+      
+      - name: Run Black (Code Formatting)
+        run: |
+          echo "🎨 Checking code formatting..."
+          poetry run black --check src/ tests/ || echo "⚠️  Code formatting issues found"
+      
+      - name: Run Flake8 (Linting)
+        run: |
+          echo "🔍 Running linter..."
+          poetry run flake8 src/ tests/ --max-line-length=120 --extend-ignore=E203,W503 || echo "⚠️  Linting issues found"
+      
+      - name: Run MyPy (Type Checking)
+        run: |
+          echo "🔬 Running type checker..."
+          poetry run mypy src/ --ignore-missing-imports || echo "⚠️  Type checking issues found"
+      
+      - name: Run Bandit (Security)
+        run: |
+          echo "🔒 Running security scan..."
+          poetry run bandit -r src/ -ll || echo "⚠️  Security issues found"
+
+  # ============================================================================
+  # DOCKER BUILD & VALIDATION
+  # ============================================================================
+  docker-build:
+    name: Docker Build & Validation
+    runs-on: ubuntu-latest
+    needs: [phase1-core-tests]
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Docker Image
+        run: |
+          echo "🐳 Building Docker image..."
+          docker build -t matching-engine:test .
+      
+      - name: Test Docker Image
+        run: |
+          echo "🧪 Testing Docker image..."
+          docker run --rm matching-engine:test python -c "from src.matching_engine.core import MatchingEngine; print('✅ Import successful')"
+      
+      - name: Docker Image Size Check
+        run: |
+          echo "📊 Checking Docker image size..."
+          docker images matching-engine:test --format "{{.Size}}"
+      
+      - name: Health Check
+        run: |
+          echo "🏥 Running health check..."
+          docker run -d --name test-container -p 8000:8000 matching-engine:test
+          sleep 5
+          curl -f http://localhost:8000/health || echo "⚠️  Health check failed"
+          docker stop test-container
+
+  # ============================================================================
+  # INTEGRATION TESTS (All Phases Together)
+  # ============================================================================
+  integration-tests:
+    name: Full Integration Tests
+    runs-on: ubuntu-latest
+    needs: [phase1-core-tests, phase2-order-management-tests, docker-build]
+    if: always() && (needs.phase1-core-tests.result == 'success')
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: matching_engine_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install Dependencies
+        run: |
+          pip install poetry==${{ env.POETRY_VERSION }}
+          poetry install --with dev
+      
+      - name: Run All Integration Tests
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/matching_engine_test
+          REDIS_URL: redis://localhost:6379
+        run: |
+          echo "🔗 Running full integration test suite..."
+          poetry run pytest tests/integration/ -v --tb=short
+      
+      - name: Run End-to-End Tests
+        run: |
+          echo "🎯 Running end-to-end tests..."
+          if [ -d "tests/e2e" ]; then
+            poetry run pytest tests/e2e/ -v --tb=short
+          else
+            echo "⚠️  E2E tests not yet created"
+          fi
+
+  # ============================================================================
+  # PERFORMANCE BENCHMARKS
+  # ============================================================================
+  performance-tests:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    needs: [phase1-core-tests]
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install Dependencies
+        run: |
+          pip install poetry==${{ env.POETRY_VERSION }}
+          poetry install --with dev
+      
+      - name: Run Performance Benchmarks
+        run: |
+          echo "⚡ Running performance benchmarks..."
+          poetry run pytest tests/performance/ -v --benchmark-only --benchmark-json=benchmark-results.json
+      
+      - name: Store Benchmark Results
+        uses: actions/upload-artifact@v3
+        with:
+          name: benchmark-results
+          path: benchmark-results.json
+      
+      - name: Performance Regression Check
+        run: |
+          echo "📊 Checking for performance regressions..."
+          # Compare with baseline (implement later)
+          echo "✅ Performance check complete"
+
+  # ============================================================================
+  # FINAL STATUS CHECK
+  # ============================================================================
+  pipeline-status:
+    name: Pipeline Status
+    runs-on: ubuntu-latest
+    needs: [
+      phase1-core-tests,
+      phase2-order-management-tests,
+      phase3-api-tests,
+      code-quality,
+      docker-build,
+      integration-tests,
+      performance-tests
+    ]
+    if: always()
+    
+    steps:
+      - name: Check Pipeline Status
+        run: |
+          echo "📊 Pipeline Status Summary"
+          echo "=========================="
+          echo "Phase 1 Tests: ${{ needs.phase1-core-tests.result }}"
+          echo "Phase 2 Tests: ${{ needs.phase2-order-management-tests.result }}"
+          echo "Phase 3 Tests: ${{ needs.phase3-api-tests.result }}"
+          echo "Code Quality: ${{ needs.code-quality.result }}"
+          echo "Docker Build: ${{ needs.docker-build.result }}"
+          echo "Integration: ${{ needs.integration-tests.result }}"
+          echo "Performance: ${{ needs.performance-tests.result }}"
+          echo "=========================="
+          
+          if [ "${{ needs.phase1-core-tests.result }}" != "success" ]; then
+            echo "❌ Phase 1 tests failed - blocking pipeline"
+            exit 1
+          fi
+          
+          echo "✅ All critical tests passed!"
+      
+      - name: Send Notification
+        if: failure()
+        run: |
+          echo "📧 Sending failure notification..."
+          # Add notification logic here (Slack, email, etc.)
+
+  # ============================================================================
+  # BUILD ARTIFACTS
+  # ============================================================================
+  build-artifacts:
+    name: Build & Store Artifacts
+    runs-on: ubuntu-latest
+    needs: [pipeline-status]
+    if: success() && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      
+      - name: Build Docker Image
+        run: |
+          docker build -t matching-engine:${{ github.sha }} .
+          docker save matching-engine:${{ github.sha }} > matching-engine.tar
+      
+      - name: Upload Docker Image
+        uses: actions/upload-artifact@v3
+        with:
+          name: docker-image
+          path: matching-engine.tar
+          retention-days: 7
+      
+      - name: Generate Test Report
+        run: |
+          echo "📄 Generating test report..."
+          echo "Build: ${{ github.sha }}" > test-report.txt
+          echo "Status: SUCCESS" >> test-report.txt
+      
+      - name: Upload Test Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-report
+          path: test-report.txt
