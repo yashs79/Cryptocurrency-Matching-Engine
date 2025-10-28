@@ -116,7 +116,7 @@ jobs:
           name: phase1-coverage
       
       - name: Store Phase 1 Test Results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: phase1-test-results
@@ -393,7 +393,7 @@ jobs:
           poetry run pytest tests/performance/ -v --benchmark-only --benchmark-json=benchmark-results.json
       
       - name: Store Benchmark Results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: benchmark-results
           path: benchmark-results.json
@@ -467,7 +467,7 @@ jobs:
           docker save matching-engine:${{ github.sha }} > matching-engine.tar
       
       - name: Upload Docker Image
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: docker-image
           path: matching-engine.tar
@@ -480,7 +480,7 @@ jobs:
           echo "Status: SUCCESS" >> test-report.txt
       
       - name: Upload Test Report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-report
           path: test-report.txt
