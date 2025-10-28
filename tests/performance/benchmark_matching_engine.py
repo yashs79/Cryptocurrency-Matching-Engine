@@ -30,7 +30,8 @@ class TestMatchingEnginePerformance:
             engine.process_order(order)
         
         result = benchmark(insert_order)
-        print(f"\nOrder insertion: {result.stats.mean * 1000:.3f}ms avg")
+        if result:
+            print(f"\nOrder insertion: {result.stats.mean * 1000:.3f}ms avg")
     
     def test_benchmark_order_matching(self, benchmark):
         """Benchmark order matching speed"""
@@ -60,7 +61,8 @@ class TestMatchingEnginePerformance:
             engine.process_order(buy_order)
         
         result = benchmark(match_order)
-        print(f"\nOrder matching: {result.stats.mean * 1000:.3f}ms avg")
+        if result:
+            print(f"\nOrder matching: {result.stats.mean * 1000:.3f}ms avg")
     
     def test_benchmark_market_order(self, benchmark):
         """Benchmark market order execution"""
@@ -90,7 +92,8 @@ class TestMatchingEnginePerformance:
             engine.process_order(market_order)
         
         result = benchmark(execute_market_order)
-        print(f"\nMarket order execution: {result.stats.mean * 1000:.3f}ms avg")
+        if result:
+            print(f"\nMarket order execution: {result.stats.mean * 1000:.3f}ms avg")
     
     def test_benchmark_order_cancellation(self, benchmark):
         """Benchmark order cancellation speed"""
@@ -117,7 +120,8 @@ class TestMatchingEnginePerformance:
                 idx[0] += 1
         
         result = benchmark(cancel_order)
-        print(f"\nOrder cancellation: {result.stats.mean * 1000:.3f}ms avg")
+        if result:
+            print(f"\nOrder cancellation: {result.stats.mean * 1000:.3f}ms avg")
     
     def test_benchmark_order_book_depth(self, benchmark):
         """Benchmark order book depth calculation"""
@@ -151,7 +155,8 @@ class TestMatchingEnginePerformance:
             book.get_depth(levels=20)
         
         result = benchmark(get_depth)
-        print(f"\nOrder book depth: {result.stats.mean * 1000:.3f}ms avg")
+        if result:
+            print(f"\nOrder book depth: {result.stats.mean * 1000:.3f}ms avg")
     
     def test_benchmark_high_frequency_trading(self, benchmark):
         """Benchmark high-frequency trading scenario"""
@@ -179,7 +184,8 @@ class TestMatchingEnginePerformance:
                 engine.cancel_order("BTC-USD", order.order_id)
         
         result = benchmark(hft_scenario)
-        print(f"\nHFT scenario (10 orders + 5 cancels): {result.stats.mean * 1000:.3f}ms avg")
+        if result:
+            print(f"\nHFT scenario (10 orders + 5 cancels): {result.stats.mean * 1000:.3f}ms avg")
     
     def test_benchmark_large_order_sweep(self, benchmark):
         """Benchmark large order sweeping through order book"""
@@ -209,7 +215,8 @@ class TestMatchingEnginePerformance:
             engine.process_order(buy_order)
         
         result = benchmark(large_sweep)
-        print(f"\nLarge order sweep: {result.stats.mean * 1000:.3f}ms avg")
+        if result:
+            print(f"\nLarge order sweep: {result.stats.mean * 1000:.3f}ms avg")
     
     def test_benchmark_multi_symbol_trading(self, benchmark):
         """Benchmark multi-symbol trading"""
@@ -241,7 +248,8 @@ class TestMatchingEnginePerformance:
                 engine.process_order(sell_order)
         
         result = benchmark(multi_symbol_trade)
-        print(f"\nMulti-symbol trading (5 symbols): {result.stats.mean * 1000:.3f}ms avg")
+        if result:
+            print(f"\nMulti-symbol trading (5 symbols): {result.stats.mean * 1000:.3f}ms avg")
 
 
 class TestScalabilityBenchmarks:
@@ -362,7 +370,8 @@ class TestLatencyBenchmarks:
             engine.process_order(buy_order)
         
         result = benchmark(immediate_match)
-        print(f"\nBest case latency: {result.stats.mean * 1000:.3f}ms")
+        if result:
+            print(f"\nBest case latency: {result.stats.mean * 1000:.3f}ms")
     
     def test_worst_case_latency(self, benchmark):
         """Worst case: Order sweeps through many price levels"""
@@ -391,4 +400,5 @@ class TestLatencyBenchmarks:
             engine.process_order(buy_order)
         
         result = benchmark(sweep_book)
-        print(f"\nWorst case latency: {result.stats.mean * 1000:.3f}ms")
+        if result:
+            print(f"\nWorst case latency: {result.stats.mean * 1000:.3f}ms")
