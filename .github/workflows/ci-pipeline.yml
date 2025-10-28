@@ -158,21 +158,25 @@ jobs:
           poetry run pytest tests/unit/test_order.py tests/unit/test_order_book.py tests/unit/test_matching_engine.py -v --tb=line
       
       - name: Run Phase 2 Unit Tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           echo "🧪 Running Phase 2 Order Management Tests..."
-          if [ -d "tests/unit/services" ]; then
-            poetry run pytest tests/unit/services/ -v --tb=short --cov=src/matching_engine/services --cov-report=xml:coverage-phase2.xml
+          if [ -d "tests/unit/services" ] || [ -d "tests/unit/repositories" ] || [ -d "tests/unit/events" ]; then
+            poetry run pytest tests/unit/services/ tests/unit/repositories/ tests/unit/events/ -v --tb=short --cov=src/matching_engine/services --cov=src/matching_engine/repositories --cov=src/matching_engine/events --cov-report=xml:coverage-phase2.xml
           else
             echo "⚠️  Phase 2 tests not yet created"
           fi
       
       - name: Run Phase 2 Integration Tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           echo "🔗 Running Phase 2 Integration Tests..."
-          if [ -f "tests/integration/test_order_management_flow.py" ]; then
-            poetry run pytest tests/integration/test_order_management_flow.py -v --tb=short
+          if [ -d "tests/integration" ]; then
+            poetry run pytest tests/integration/ -v --tb=short --cov=src/matching_engine --cov-report=xml:coverage-integration.xml --cov-append
           else
-            echo "⚠️  Phase 2 integration tests not yet created"
+            echo "⚠️  Integration tests not yet created"
           fi
       
       - name: Upload Phase 2 Coverage
