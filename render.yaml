@@ -1,0 +1,62 @@
+# Render Blueprint for Matching Engine
+# This file defines both development and production environments
+
+services:
+  # Development Environment
+  - type: web
+    name: matching-engine-dev
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    branch: dev
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: development
+      - key: LOG_LEVEL
+        value: DEBUG
+      - key: API_HOST
+        value: 0.0.0.0
+      - key: API_PORT
+        value: 8000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: matching-engine-dev-db
+          property: connectionString
+
+  # Production Environment
+  - type: web
+    name: matching-engine
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    branch: main
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: API_HOST
+        value: 0.0.0.0
+      - key: API_PORT
+        value: 8000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: matching-engine-prod-db
+          property: connectionString
+
+databases:
+  # Development Database
+  - name: matching-engine-dev-db
+    databaseName: matching_engine_dev
+    user: matching_dev
+    plan: free
+
+  # Production Database
+  - name: matching-engine-prod-db
+    databaseName: matching_engine_prod
+    user: matching_prod
+    plan: starter

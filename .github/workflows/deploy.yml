@@ -1,0 +1,124 @@
+name: Deploy Application
+
+on:
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  deploy:
+    name: Deploy to ${{ github.ref_name == 'main' && 'Production' || 'Development' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.ref_name == 'main' && 'production' || 'development' }}
+      url: ${{ github.ref_name == 'main' && 'https://matching-engine.onrender.com' || 'https://dev.matching-engine.onrender.com' }}
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      
+      - name: Set Environment Variables
+        id: env
+        run: |
+          if [ "${{ github.ref_name }}" == "main" ]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "deploy_hook=${{ secrets.RENDER_DEPLOY_HOOK_PROD }}" >> $GITHUB_OUTPUT
+            echo "app_url=https://matching-engine.onrender.com" >> $GITHUB_OUTPUT
+            echo "env_name=Production" >> $GITHUB_OUTPUT
+          else
+            echo "environment=development" >> $GITHUB_OUTPUT
+            echo "deploy_hook=${{ secrets.RENDER_DEPLOY_HOOK_DEV }}" >> $GITHUB_OUTPUT
+            echo "app_url=https://dev.matching-engine.onrender.com" >> $GITHUB_OUTPUT
+            echo "env_name=Development" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Set Image Tag
+        id: image
+        run: |
+          IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}"
+          echo "tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+      
+      - name: Trigger Render Deployment
+        run: |
+          echo "🚀 Deploying to ${{ steps.env.outputs.env_name }} Environment"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Environment: ${{ steps.env.outputs.environment }}"
+          echo "URL: ${{ steps.env.outputs.app_url }}"
+          echo ""
+          
+          if [ -n "${{ steps.env.outputs.deploy_hook }}" ]; then
+            echo "Triggering Render deployment..."
+            curl -X POST "${{ steps.env.outputs.deploy_hook }}"
+          else
+            echo "⚠️  Deploy hook not configured"
+            echo "Add RENDER_DEPLOY_HOOK_PROD or RENDER_DEPLOY_HOOK_DEV to GitHub Secrets"
+            exit 1
+          fi
+      
+      - name: Wait for Deployment
+        run: |
+          echo "⏳ Waiting for deployment to complete..."
+          if [ "${{ steps.env.outputs.environment }}" == "production" ]; then
+            sleep 120
+          else
+            sleep 60
+          fi
+      
+      - name: Health Check
+        run: |
+          echo "🏥 Running health check..."
+          MAX_RETRIES=5
+          RETRY_COUNT=0
+          
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            if curl -f ${{ steps.env.outputs.app_url }}/health; then
+              echo "✅ Health check passed!"
+              exit 0
+            else
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              echo "⏳ Attempt $RETRY_COUNT/$MAX_RETRIES failed, retrying in 20s..."
+              sleep 20
+            fi
+          done
+          
+          echo "⚠️  Health check failed after $MAX_RETRIES attempts"
+          exit 1
+        continue-on-error: ${{ github.ref_name != 'main' }}
+      
+      - name: Smoke Tests
+        if: github.ref_name == 'main'
+        run: |
+          echo "🧪 Running smoke tests..."
+          
+          # Test root endpoint
+          curl -f ${{ steps.env.outputs.app_url }}/ || exit 1
+          
+          # Test docs endpoint
+          curl -f ${{ steps.env.outputs.app_url }}/docs || exit 1
+          
+          # Test metrics endpoint
+          curl -f ${{ steps.env.outputs.app_url }}/metrics || exit 1
+          
+          echo "✅ All smoke tests passed!"
+      
+      - name: Deployment Summary
+        run: |
+          echo "✅ ${{ steps.env.outputs.env_name }} Deployment Complete!"
+          echo ""
+          echo "🌐 Application: ${{ steps.env.outputs.app_url }}"
+          echo "📚 API Docs: ${{ steps.env.outputs.app_url }}/docs"
+          echo "❤️  Health: ${{ steps.env.outputs.app_url }}/health"
+          echo "📊 Metrics: ${{ steps.env.outputs.app_url }}/metrics"
+          echo ""
+          if [ "${{ steps.env.outputs.environment }}" == "production" ]; then
+            echo "🎉 Live for end users!"
+          else
+            echo "🧪 QA Team: Ready for testing!"
+          fi
+          echo "📝 Commit: ${{ github.sha }}"
+          echo "👤 Deployed by: ${{ github.actor }}"

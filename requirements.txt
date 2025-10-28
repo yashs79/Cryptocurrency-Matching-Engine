@@ -48,7 +48,7 @@ mypy==1.8.0
 
 # Security
 bandit==1.7.6
-safety==3.0.1
+# safety removed due to pydantic version conflict
 
 # Utilities
 python-dotenv==1.0.0
