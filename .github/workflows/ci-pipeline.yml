@@ -496,10 +496,17 @@ jobs:
           pip install poetry==${{ env.POETRY_VERSION }}
           poetry install --with dev
       
+      - name: Verify Test Files
+        run: |
+          echo "📁 Checking test files..."
+          ls -la tests/performance/
+          echo "🔍 Collecting tests..."
+          poetry run pytest tests/performance/ --collect-only || echo "Collection failed"
+      
       - name: Run Performance Benchmarks
         run: |
           echo "⚡ Running performance benchmarks..."
-          poetry run pytest tests/performance/ -v --benchmark-json=benchmark-results.json
+          poetry run pytest tests/performance/ -v --benchmark-json=benchmark-results.json --tb=short
       
       - name: Store Benchmark Results
         uses: actions/upload-artifact@v4
