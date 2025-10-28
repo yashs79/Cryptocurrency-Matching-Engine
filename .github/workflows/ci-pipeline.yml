@@ -495,13 +495,16 @@ jobs:
         run: |
           pip install poetry==${{ env.POETRY_VERSION }}
           poetry install --with dev
+          poetry run pip install -e .
       
       - name: Verify Test Files
         run: |
           echo "📁 Checking test files..."
           ls -la tests/performance/
+          echo "🔍 Verifying imports..."
+          poetry run python -c "from src.matching_engine.core import MatchingEngine; print('✅ Imports working')"
           echo "🔍 Collecting tests..."
-          poetry run pytest tests/performance/ --collect-only || echo "Collection failed"
+          poetry run pytest tests/performance/ --collect-only -v || echo "Collection failed"
       
       - name: Run Performance Benchmarks
         run: |
