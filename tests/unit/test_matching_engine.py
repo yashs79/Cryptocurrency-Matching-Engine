@@ -6,7 +6,8 @@ import pytest
 from decimal import Decimal
 
 from src.matching_engine.core.order import Order, OrderSide, OrderType, OrderStatus
-from src.matching_engine.core.matching_engine import MatchingEngine, Trade
+from src.matching_engine.core.matching_engine import MatchingEngine
+from src.matching_engine.core.trade import Trade
 
 
 class TestTrade:
@@ -18,6 +19,8 @@ class TestTrade:
             symbol="BTC-USD",
             buyer_order_id="buy123",
             seller_order_id="sell456",
+            buyer_user_id="alice",
+            seller_user_id="bob",
             price=Decimal("50000"),
             quantity=Decimal("1.5")
         )
@@ -25,6 +28,8 @@ class TestTrade:
         assert trade.symbol == "BTC-USD"
         assert trade.buyer_order_id == "buy123"
         assert trade.seller_order_id == "sell456"
+        assert trade.buyer_user_id == "alice"
+        assert trade.seller_user_id == "bob"
         assert trade.price == Decimal("50000")
         assert trade.quantity == Decimal("1.5")
         assert trade.trade_id is not None
@@ -35,6 +40,8 @@ class TestTrade:
             symbol="BTC-USD",
             buyer_order_id="buy123",
             seller_order_id="sell456",
+            buyer_user_id="alice",
+            seller_user_id="bob",
             price=Decimal("50000"),
             quantity=Decimal("1.5")
         )

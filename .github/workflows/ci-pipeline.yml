@@ -162,10 +162,26 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}
         run: |
           echo "🧪 Running Phase 2 Order Management Tests..."
-          if [ -d "tests/unit/services" ] || [ -d "tests/unit/repositories" ] || [ -d "tests/unit/events" ]; then
-            poetry run pytest tests/unit/services/ tests/unit/repositories/ tests/unit/events/ -v --tb=short --cov=src/matching_engine/services --cov=src/matching_engine/repositories --cov=src/matching_engine/events --cov-report=xml:coverage-phase2.xml
+          if [ -d "tests/unit/services" ] || [ -d "tests/unit/repositories" ] || [ -d "tests/unit/events" ] || [ -d "tests/unit/persistence" ]; then
+            poetry run pytest tests/unit/services/ tests/unit/repositories/ tests/unit/events/ tests/unit/persistence/ -v --tb=short --cov=src/matching_engine/services --cov=src/matching_engine/repositories --cov=src/matching_engine/events --cov=src/matching_engine/persistence --cov-report=xml:coverage-phase2.xml
           else
             echo "⚠️  Phase 2 tests not yet created"
+          fi
+      
+      - name: Run Critical Persistence Tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          echo "🔥 Running CRITICAL Persistence & Crash Recovery Tests..."
+          if [ -d "tests/unit/persistence" ]; then
+            poetry run pytest tests/unit/persistence/ -v --tb=short --maxfail=1
+            if [ $? -ne 0 ]; then
+              echo "❌ CRITICAL: Persistence tests failed! This is a blocking issue."
+              exit 1
+            fi
+            echo "✅ All persistence tests passed"
+          else
+            echo "⚠️  Persistence tests not found"
           fi
       
       - name: Run Phase 2 Integration Tests
@@ -177,6 +193,22 @@ jobs:
             poetry run pytest tests/integration/ -v --tb=short --cov=src/matching_engine --cov-report=xml:coverage-integration.xml --cov-append
           else
             echo "⚠️  Integration tests not yet created"
+          fi
+      
+      - name: Run Crash Recovery Integration Tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          echo "💥 Running Crash Recovery Integration Tests..."
+          if [ -f "tests/integration/test_crash_recovery.py" ]; then
+            poetry run pytest tests/integration/test_crash_recovery.py -v --tb=short --maxfail=1
+            if [ $? -ne 0 ]; then
+              echo "❌ CRITICAL: Crash recovery tests failed!"
+              exit 1
+            fi
+            echo "✅ Crash recovery verified"
+          else
+            echo "⚠️  Crash recovery tests not found"
           fi
       
       - name: Upload Phase 2 Coverage

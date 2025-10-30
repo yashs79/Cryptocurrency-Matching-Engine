@@ -1,5 +1,5 @@
 """
-Order events and event handling system.
+Events and event handling system.
 """
 
 from .order_events import (
@@ -12,6 +12,12 @@ from .order_events import (
     OrderRejectedEvent,
     OrderAmendedEvent,
 )
+from .trade_events import (
+    TradeExecutedEvent,
+    TradeSettledEvent,
+    TradeFailedEvent,
+    TradeCancelledEvent,
+)
 from .event_publisher import EventPublisher, EventSubscriber
 
 __all__ = [
@@ -23,6 +29,10 @@ __all__ = [
     "OrderPartiallyFilledEvent",
     "OrderRejectedEvent",
     "OrderAmendedEvent",
+    "TradeExecutedEvent",
+    "TradeSettledEvent",
+    "TradeFailedEvent",
+    "TradeCancelledEvent",
     "EventPublisher",
     "EventSubscriber",
 ]

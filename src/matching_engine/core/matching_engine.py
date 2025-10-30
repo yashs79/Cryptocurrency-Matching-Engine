@@ -13,57 +13,9 @@ import uuid
 
 from .order import Order, OrderSide, OrderType, OrderStatus
 from .order_book import OrderBook
+from .trade import Trade
 
 logger = logging.getLogger(__name__)
-
-
-class Trade:
-    """
-    Represents a completed trade between two orders.
-    
-    Attributes:
-        trade_id: Unique trade identifier
-        symbol: Trading pair symbol
-        buyer_order_id: ID of the buy order
-        seller_order_id: ID of the sell order
-        price: Execution price
-        quantity: Executed quantity
-        timestamp: Trade execution timestamp
-    """
-    
-    def __init__(
-        self,
-        symbol: str,
-        buyer_order_id: str,
-        seller_order_id: str,
-        price: Decimal,
-        quantity: Decimal
-    ):
-        self.trade_id = str(uuid.uuid4())
-        self.symbol = symbol
-        self.buyer_order_id = buyer_order_id
-        self.seller_order_id = seller_order_id
-        self.price = price
-        self.quantity = quantity
-        self.timestamp = datetime.now(UTC)
-    
-    def to_dict(self) -> Dict:
-        """Convert trade to dictionary"""
-        return {
-            'trade_id': self.trade_id,
-            'symbol': self.symbol,
-            'buyer_order_id': self.buyer_order_id,
-            'seller_order_id': self.seller_order_id,
-            'price': str(self.price),
-            'quantity': str(self.quantity),
-            'timestamp': self.timestamp.isoformat()
-        }
-    
-    def __repr__(self) -> str:
-        return (
-            f"Trade(id={self.trade_id[:8]}, {self.symbol}, "
-            f"{self.quantity} @ {self.price})"
-        )
 
 
 class MatchingEngine:
@@ -263,18 +215,24 @@ class MatchingEngine:
         incoming_order.fill(trade_quantity)
         resting_order.fill(trade_quantity)
         
-        # Create trade
+        # Create trade with user IDs
         if incoming_order.side == OrderSide.BUY:
             buyer_order_id = incoming_order.order_id
             seller_order_id = resting_order.order_id
+            buyer_user_id = incoming_order.user_id
+            seller_user_id = resting_order.user_id
         else:
             buyer_order_id = resting_order.order_id
             seller_order_id = incoming_order.order_id
+            buyer_user_id = resting_order.user_id
+            seller_user_id = incoming_order.user_id
         
         trade = Trade(
             symbol=incoming_order.symbol,
             buyer_order_id=buyer_order_id,
             seller_order_id=seller_order_id,
+            buyer_user_id=buyer_user_id,
+            seller_user_id=seller_user_id,
             price=price,
             quantity=trade_quantity
         )

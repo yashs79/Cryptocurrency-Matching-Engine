@@ -442,11 +442,11 @@ class OrderRepository:
             "users": len(self._user_index),
             "symbols": len(self._symbol_index),
             "status_breakdown": {
-                status.value: len(order_ids)
+                (status.value if hasattr(status, 'value') else status): len(order_ids)
                 for status, order_ids in self._status_index.items()
             },
             "side_breakdown": {
-                side.value: len(order_ids)
+                (side.value if hasattr(side, 'value') else side): len(order_ids)
                 for side, order_ids in self._side_index.items()
             }
         }

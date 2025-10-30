@@ -5,7 +5,7 @@ Provides pub/sub mechanism for order events.
 Supports synchronous and asynchronous event delivery.
 """
 
-from typing import Callable, Dict, List, Set, Optional
+from typing import Callable, Dict, List, Set, Optional, Union, Any
 from datetime import datetime, UTC
 import logging
 from collections import defaultdict
@@ -84,44 +84,45 @@ class EventPublisher:
     
     def subscribe(
         self,
-        subscriber: EventSubscriber,
-        event_type: Optional[OrderEventType] = None
+        event_type: Union[str, OrderEventType],
+        subscriber: Union[EventSubscriber, Callable]
     ) -> None:
         """
         Subscribe to events.
         
         Args:
-            subscriber: Subscriber object
-            event_type: Specific event type to subscribe to, or None for all events
+            event_type: Event type to subscribe to (string or OrderEventType)
+            subscriber: Subscriber object or callable
         """
-        if event_type is None:
-            self._global_subscribers.add(subscriber)
-            logger.debug(f"Subscriber {subscriber} subscribed to all events")
+        # Normalize event type to string
+        if isinstance(event_type, OrderEventType):
+            event_key = event_type.value
         else:
-            self._subscribers[event_type].add(subscriber)
-            logger.debug(f"Subscriber {subscriber} subscribed to {event_type.value} events")
+            event_key = event_type
+        
+        self._subscribers[event_key].add(subscriber)
+        logger.debug(f"Subscriber {subscriber} subscribed to {event_key} events")
     
     def unsubscribe(
         self,
-        subscriber: EventSubscriber,
-        event_type: Optional[OrderEventType] = None
+        event_type: Union[str, OrderEventType],
+        subscriber: Union[EventSubscriber, Callable]
     ) -> None:
         """
         Unsubscribe from events.
         
         Args:
-            subscriber: Subscriber object
-            event_type: Specific event type to unsubscribe from, or None for all events
+            event_type: Event type to unsubscribe from (string or OrderEventType)
+            subscriber: Subscriber object or callable
         """
-        if event_type is None:
-            self._global_subscribers.discard(subscriber)
-            # Also remove from all specific subscriptions
-            for subscribers in self._subscribers.values():
-                subscribers.discard(subscriber)
-            logger.debug(f"Subscriber {subscriber} unsubscribed from all events")
+        # Normalize event type to string
+        if isinstance(event_type, OrderEventType):
+            event_key = event_type.value
         else:
-            self._subscribers[event_type].discard(subscriber)
-            logger.debug(f"Subscriber {subscriber} unsubscribed from {event_type.value} events")
+            event_key = event_type
+        
+        self._subscribers[event_key].discard(subscriber)
+        logger.debug(f"Subscriber {subscriber} unsubscribed from {event_key} events")
     
     def on(
         self,
@@ -150,49 +151,51 @@ class EventPublisher:
         
         return decorator
     
-    def publish(self, event: OrderEvent) -> None:
+    def publish(self, event: Any) -> None:
         """
         Publish an event synchronously.
         
         Args:
-            event: Event to publish
+            event: Event to publish (OrderEvent or any event with event_type property)
         """
-        # Add to history
-        self._add_to_history(event)
+        # Get event type
+        if hasattr(event, 'event_type'):
+            if isinstance(event.event_type, OrderEventType):
+                event_key = event.event_type.value
+            else:
+                event_key = event.event_type
+        else:
+            logger.warning(f"Event {event} has no event_type property")
+            return
         
-        # Update statistics
-        self._event_counts[event.event_type] += 1
+        # Add to history if it's an OrderEvent
+        if isinstance(event, OrderEvent):
+            self._add_to_history(event)
+            self._event_counts[event.event_type] += 1
+        
         self._total_events += 1
         
         # Notify global subscribers
         for subscriber in self._global_subscribers:
             try:
-                subscriber.on_event(event)
+                if hasattr(subscriber, 'on_event'):
+                    subscriber.on_event(event)
+                elif callable(subscriber):
+                    subscriber(event)
             except Exception as e:
                 logger.error(f"Error in subscriber {subscriber}: {e}")
         
         # Notify type-specific subscribers
-        for subscriber in self._subscribers.get(event.event_type, set()):
+        for subscriber in self._subscribers.get(event_key, set()):
             try:
-                subscriber.on_event(event)
+                if hasattr(subscriber, 'on_event'):
+                    subscriber.on_event(event)
+                elif callable(subscriber):
+                    subscriber(event)
             except Exception as e:
                 logger.error(f"Error in subscriber {subscriber}: {e}")
         
-        # Call global callbacks
-        for callback in self._global_callbacks:
-            try:
-                callback(event)
-            except Exception as e:
-                logger.error(f"Error in callback {callback}: {e}")
-        
-        # Call type-specific callbacks
-        for callback in self._callbacks.get(event.event_type, []):
-            try:
-                callback(event)
-            except Exception as e:
-                logger.error(f"Error in callback {callback}: {e}")
-        
-        logger.debug(f"Published {event.event_type.value} event for order {event.order.order_id}")
+        logger.debug(f"Published {event_key} event")
     
     async def publish_async(self, event: OrderEvent) -> None:
         """
