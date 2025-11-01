@@ -11,6 +11,12 @@ from .orders import (
     CancelOrderResponse,
     AmendOrderRequest
 )
+from .trades import (
+    TradeResponse,
+    TradeListResponse,
+    TradeStatsResponse,
+    UserVolumeResponse
+)
 
 __all__ = [
     "OrderRequest",
@@ -18,4 +24,8 @@ __all__ = [
     "OrderListResponse",
     "CancelOrderResponse",
     "AmendOrderRequest",
+    "TradeResponse",
+    "TradeListResponse",
+    "TradeStatsResponse",
+    "UserVolumeResponse",
 ]
