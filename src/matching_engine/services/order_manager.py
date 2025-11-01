@@ -88,10 +88,11 @@ class OrderManager:
             processed_order, trades = self.matching_engine.process_order(order)
             
             # Record action
+            side_value = order.side.value if hasattr(order.side, 'value') else str(order.side)
             self._record_action(
                 order.order_id,
                 OrderAction.SUBMIT,
-                f"Order submitted: {order.side.value} {order.quantity} @ {order.price or 'MARKET'}"
+                f"Order submitted: {side_value} {order.quantity} @ {order.price or 'MARKET'}"
             )
             
             # Record fills if any

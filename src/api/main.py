@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 
 from ..matching_engine.config.database import init_db
 from .config import settings
+from .routers import orders_router
 
 # Configure logging
 logging.basicConfig(
@@ -61,6 +62,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(orders_router)
 
 
 @app.get("/", tags=["Root"])
