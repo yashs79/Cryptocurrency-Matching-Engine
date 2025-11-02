@@ -25,8 +25,10 @@ class DatabaseConfig:
         self,
         database_url: str = None,
         echo: bool = False,
-        pool_size: int = 5,
-        max_overflow: int = 10
+        pool_size: int = 20,
+        max_overflow: int = 40,
+        pool_recycle: int = 3600,
+        pool_timeout: int = 30
     ):
         """
         Initialize database configuration.
@@ -48,6 +50,8 @@ class DatabaseConfig:
         self.echo = echo
         self.pool_size = pool_size
         self.max_overflow = max_overflow
+        self.pool_recycle = pool_recycle
+        self.pool_timeout = pool_timeout
         
         # Create engine
         if database_url.startswith("sqlite"):
@@ -59,13 +63,19 @@ class DatabaseConfig:
                 poolclass=StaticPool if ":memory:" in database_url else None
             )
         else:
-            # PostgreSQL settings
+            # PostgreSQL settings with optimized pooling
             self.engine = create_engine(
                 database_url,
                 echo=echo,
                 pool_size=pool_size,
                 max_overflow=max_overflow,
-                pool_pre_ping=True  # Verify connections before using
+                pool_pre_ping=True,  # Verify connections before using
+                pool_recycle=pool_recycle,  # Recycle connections after 1 hour
+                pool_timeout=pool_timeout,  # Wait 30s for connection
+                connect_args={
+                    "connect_timeout": 10,
+                    "options": "-c statement_timeout=30000"  # 30s query timeout
+                }
             )
         
         # Create session factory
@@ -106,6 +116,22 @@ class DatabaseConfig:
     def get_session(self) -> Session:
         """Get a new database session"""
         return self.SessionLocal()
+    
+    def get_pool_stats(self) -> dict:
+        """
+        Get connection pool statistics.
+        
+        Returns:
+            Dictionary with pool stats
+        """
+        pool = self.engine.pool
+        return {
+            "size": pool.size(),
+            "checked_in": pool.checkedin(),
+            "checked_out": pool.checkedout(),
+            "overflow": pool.overflow(),
+            "total_connections": pool.size() + pool.overflow()
+        }
 
 
 # Global database config instance

@@ -101,8 +101,16 @@ async def system_status():
     Get system status and statistics.
     """
     from ..matching_engine.cache import cache_manager
+    from ..matching_engine.config.database import get_db_config
     
     cache_stats = cache_manager.get_stats()
+    
+    # Get database pool stats
+    try:
+        db_config = get_db_config()
+        pool_stats = db_config.get_pool_stats()
+    except:
+        pool_stats = {"error": "Database not initialized"}
     
     return {
         "status": "operational",
@@ -118,6 +126,12 @@ async def system_status():
             "size": cache_stats["size"],
             "hit_rate": f"{cache_stats['hit_rate']}%",
             "total_requests": cache_stats["total_requests"]
+        },
+        "database": {
+            "pool_size": pool_stats.get("size", 0),
+            "active_connections": pool_stats.get("checked_out", 0),
+            "idle_connections": pool_stats.get("checked_in", 0),
+            "total_connections": pool_stats.get("total_connections", 0)
         }
     }
 
