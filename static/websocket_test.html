@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Test - Matching Engine</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .panel {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .controls {
+            margin-bottom: 20px;
+        }
+        input, select, button {
+            padding: 8px 12px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .disconnect {
+            background: #dc3545;
+        }
+        .disconnect:hover {
+            background: #c82333;
+        }
+        .messages {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            background: #f9f9f9;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .message {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #007bff;
+            background: white;
+        }
+        .message.connected {
+            border-left-color: #28a745;
+        }
+        .message.trade {
+            border-left-color: #ffc107;
+        }
+        .message.error {
+            border-left-color: #dc3545;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <h1>🚀 Matching Engine WebSocket Test</h1>
+    
+    <div class="container">
+        <!-- Order Book WebSocket -->
+        <div class="panel">
+            <h2>📊 Order Book Stream</h2>
+            <div class="controls">
+                <input type="text" id="orderbook-symbol" placeholder="Symbol (e.g., BTC-USD)" value="BTC-USD">
+                <button id="orderbook-connect">Connect</button>
+                <button id="orderbook-disconnect" class="disconnect" disabled>Disconnect</button>
+            </div>
+            <div id="orderbook-status" class="status disconnected">Disconnected</div>
+            <div id="orderbook-messages" class="messages"></div>
+        </div>
+
+        <!-- Trades WebSocket -->
+        <div class="panel">
+            <h2>💹 Trade Stream</h2>
+            <div class="controls">
+                <input type="text" id="trades-symbol" placeholder="Symbol (e.g., BTC-USD)" value="BTC-USD">
+                <button id="trades-connect">Connect</button>
+                <button id="trades-disconnect" class="disconnect" disabled>Disconnect</button>
+            </div>
+            <div id="trades-status" class="status disconnected">Disconnected</div>
+            <div id="trades-messages" class="messages"></div>
+        </div>
+
+        <!-- User Orders WebSocket -->
+        <div class="panel">
+            <h2>📋 User Orders Stream</h2>
+            <div class="controls">
+                <input type="text" id="orders-userid" placeholder="User ID (e.g., alice)" value="alice">
+                <button id="orders-connect">Connect</button>
+                <button id="orders-disconnect" class="disconnect" disabled>Disconnect</button>
+            </div>
+            <div id="orders-status" class="status disconnected">Disconnected</div>
+            <div id="orders-messages" class="messages"></div>
+        </div>
+
+        <!-- Market WebSocket -->
+        <div class="panel">
+            <h2>🌐 Market Stream</h2>
+            <div class="controls">
+                <button id="market-connect">Connect</button>
+                <button id="market-disconnect" class="disconnect" disabled>Disconnect</button>
+            </div>
+            <div id="market-status" class="status disconnected">Disconnected</div>
+            <div id="market-messages" class="messages"></div>
+        </div>
+    </div>
+
+    <script>
+        // WebSocket base URL (change for production)
+        const WS_BASE = window.location.protocol === 'https:' 
+            ? 'wss://' + window.location.host 
+            : 'ws://' + window.location.host;
+
+        // WebSocket connections
+        let orderbookWs = null;
+        let tradesWs = null;
+        let ordersWs = null;
+        let marketWs = null;
+
+        // Helper function to add message to panel
+        function addMessage(panelId, message, type = 'message') {
+            const messagesDiv = document.getElementById(panelId);
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.textContent = typeof message === 'object' 
+                ? JSON.stringify(message, null, 2) 
+                : message;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // Helper function to update status
+        function updateStatus(statusId, connected) {
+            const statusDiv = document.getElementById(statusId);
+            statusDiv.className = `status ${connected ? 'connected' : 'disconnected'}`;
+            statusDiv.textContent = connected ? 'Connected ✓' : 'Disconnected';
+        }
+
+        // Order Book WebSocket
+        document.getElementById('orderbook-connect').addEventListener('click', () => {
+            const symbol = document.getElementById('orderbook-symbol').value;
+            orderbookWs = new WebSocket(`${WS_BASE}/ws/orderbook/${symbol}`);
+            
+            orderbookWs.onopen = () => {
+                updateStatus('orderbook-status', true);
+                addMessage('orderbook-messages', 'Connected to order book stream', 'connected');
+                document.getElementById('orderbook-connect').disabled = true;
+                document.getElementById('orderbook-disconnect').disabled = false;
+            };
+            
+            orderbookWs.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                addMessage('orderbook-messages', data);
+            };
+            
+            orderbookWs.onclose = () => {
+                updateStatus('orderbook-status', false);
+                addMessage('orderbook-messages', 'Disconnected', 'error');
+                document.getElementById('orderbook-connect').disabled = false;
+                document.getElementById('orderbook-disconnect').disabled = true;
+            };
+        });
+
+        document.getElementById('orderbook-disconnect').addEventListener('click', () => {
+            if (orderbookWs) orderbookWs.close();
+        });
+
+        // Trades WebSocket
+        document.getElementById('trades-connect').addEventListener('click', () => {
+            const symbol = document.getElementById('trades-symbol').value;
+            tradesWs = new WebSocket(`${WS_BASE}/ws/trades/${symbol}`);
+            
+            tradesWs.onopen = () => {
+                updateStatus('trades-status', true);
+                addMessage('trades-messages', 'Connected to trade stream', 'connected');
+                document.getElementById('trades-connect').disabled = true;
+                document.getElementById('trades-disconnect').disabled = false;
+            };
+            
+            tradesWs.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                addMessage('trades-messages', data, 'trade');
+            };
+            
+            tradesWs.onclose = () => {
+                updateStatus('trades-status', false);
+                addMessage('trades-messages', 'Disconnected', 'error');
+                document.getElementById('trades-connect').disabled = false;
+                document.getElementById('trades-disconnect').disabled = true;
+            };
+        });
+
+        document.getElementById('trades-disconnect').addEventListener('click', () => {
+            if (tradesWs) tradesWs.close();
+        });
+
+        // User Orders WebSocket
+        document.getElementById('orders-connect').addEventListener('click', () => {
+            const userId = document.getElementById('orders-userid').value;
+            ordersWs = new WebSocket(`${WS_BASE}/ws/orders?user_id=${userId}`);
+            
+            ordersWs.onopen = () => {
+                updateStatus('orders-status', true);
+                addMessage('orders-messages', 'Connected to orders stream', 'connected');
+                document.getElementById('orders-connect').disabled = true;
+                document.getElementById('orders-disconnect').disabled = false;
+            };
+            
+            ordersWs.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                addMessage('orders-messages', data);
+            };
+            
+            ordersWs.onclose = () => {
+                updateStatus('orders-status', false);
+                addMessage('orders-messages', 'Disconnected', 'error');
+                document.getElementById('orders-connect').disabled = false;
+                document.getElementById('orders-disconnect').disabled = true;
+            };
+        });
+
+        document.getElementById('orders-disconnect').addEventListener('click', () => {
+            if (ordersWs) ordersWs.close();
+        });
+
+        // Market WebSocket
+        document.getElementById('market-connect').addEventListener('click', () => {
+            marketWs = new WebSocket(`${WS_BASE}/ws/market`);
+            
+            marketWs.onopen = () => {
+                updateStatus('market-status', true);
+                addMessage('market-messages', 'Connected to market stream', 'connected');
+                document.getElementById('market-connect').disabled = true;
+                document.getElementById('market-disconnect').disabled = false;
+            };
+            
+            marketWs.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                addMessage('market-messages', data);
+            };
+            
+            marketWs.onclose = () => {
+                updateStatus('market-status', false);
+                addMessage('market-messages', 'Disconnected', 'error');
+                document.getElementById('market-connect').disabled = false;
+                document.getElementById('market-disconnect').disabled = true;
+            };
+        });
+
+        document.getElementById('market-disconnect').addEventListener('click', () => {
+            if (marketWs) marketWs.close();
+        });
+
+        // Send ping every 30 seconds to keep connections alive
+        setInterval(() => {
+            const ping = JSON.stringify({ type: 'ping' });
+            if (orderbookWs && orderbookWs.readyState === WebSocket.OPEN) {
+                orderbookWs.send(ping);
+            }
+            if (tradesWs && tradesWs.readyState === WebSocket.OPEN) {
+                tradesWs.send(ping);
+            }
+            if (ordersWs && ordersWs.readyState === WebSocket.OPEN) {
+                ordersWs.send(ping);
+            }
+            if (marketWs && marketWs.readyState === WebSocket.OPEN) {
+                marketWs.send(ping);
+            }
+        }, 30000);
+    </script>
+</body>
+</html>

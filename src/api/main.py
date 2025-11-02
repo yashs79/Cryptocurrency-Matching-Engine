@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 
 from ..matching_engine.config.database import init_db
 from .config import settings
-from .routers import orders_router, trades_router, market_router
+from .routers import orders_router, trades_router, market_router, websocket_router
 
 # Configure logging
 logging.basicConfig(
@@ -67,6 +67,7 @@ app.add_middleware(
 app.include_router(orders_router)
 app.include_router(trades_router)
 app.include_router(market_router)
+app.include_router(websocket_router)
 
 
 @app.get("/", tags=["Root"])
