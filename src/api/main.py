@@ -100,6 +100,10 @@ async def system_status():
     """
     Get system status and statistics.
     """
+    from ..matching_engine.cache import cache_manager
+    
+    cache_stats = cache_manager.get_stats()
+    
     return {
         "status": "operational",
         "version": "1.0.0",
@@ -108,6 +112,12 @@ async def system_status():
             "rest": "/api/v1",
             "websocket": "/ws",
             "docs": "/docs"
+        },
+        "cache": {
+            "enabled": True,
+            "size": cache_stats["size"],
+            "hit_rate": f"{cache_stats['hit_rate']}%",
+            "total_requests": cache_stats["total_requests"]
         }
     }
 

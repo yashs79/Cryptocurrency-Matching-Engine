@@ -14,6 +14,7 @@ from .order_repository import OrderRepository, OrderFilter, SortField, SortOrder
 from ..core.order import Order, OrderStatus, OrderSide, OrderType
 from ..models.order_model import OrderModel
 from ..config.database import get_db_config
+from ..cache import cache_manager
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,12 @@ class DatabaseOrderRepository(OrderRepository):
         # Save to in-memory cache first
         super().save(order)
         
+        # Update cache
+        cache_manager.set_order(order.order_id, order, ttl_seconds=300)
+        
+        # Invalidate user orders cache
+        cache_manager.delete_user_orders(order.user_id)
+        
         # Save to database
         try:
             # Check if order exists
@@ -94,9 +101,16 @@ class DatabaseOrderRepository(OrderRepository):
         Returns:
             Order or None if not found
         """
-        # Check in-memory cache first
+        # Check cache first
+        cached_order = cache_manager.get_order(order_id)
+        if cached_order:
+            return cached_order
+        
+        # Check in-memory cache
         order = super().get(order_id)
         if order:
+            # Cache for future requests
+            cache_manager.set_order(order_id, order, ttl_seconds=300)
             return order
         
         # Check database
@@ -107,8 +121,10 @@ class DatabaseOrderRepository(OrderRepository):
             
             if order_model:
                 order = order_model.to_order()
-                # Add to cache
+                # Add to in-memory cache
                 super().save(order)
+                # Add to cache manager
+                cache_manager.set_order(order_id, order, ttl_seconds=300)
                 return order
             
         except Exception as e:
@@ -126,8 +142,11 @@ class DatabaseOrderRepository(OrderRepository):
         Returns:
             True if deleted, False if not found
         """
-        # Delete from cache
+        # Delete from in-memory cache
         cache_deleted = super().delete(order_id)
+        
+        # Delete from cache manager
+        cache_manager.delete_order(order_id)
         
         # Delete from database
         try:
