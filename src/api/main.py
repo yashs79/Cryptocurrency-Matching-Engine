@@ -28,20 +28,61 @@ async def lifespan(app: FastAPI):
     Lifespan context manager for startup and shutdown events.
     """
     # Startup
-    logger.info("Starting Matching Engine API...")
+    logger.info("Starting up...")
     
     # Initialize database
-    try:
-        init_db(database_url=settings.DATABASE_URL, echo=settings.DEBUG)
-        logger.info("Database initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
-        raise
+    database_url = os.getenv("DATABASE_URL", "sqlite:///./matching_engine.db")
+    init_db(database_url=database_url, echo=False)
+    logger.info("Database initialized")
+    
+    # Start background tasks
+    from ..matching_engine.utils.background_tasks import (
+        background_task_manager,
+        cache_cleanup_task,
+        connection_pool_monitor,
+        event_queue_monitor
+    )
+    from ..matching_engine.events.async_event_publisher import async_event_publisher
+    
+    await background_task_manager.start()
+    
+    # Schedule periodic tasks
+    background_task_manager.schedule_periodic(
+        "cache_cleanup",
+        cache_cleanup_task,
+        interval_seconds=300,  # Every 5 minutes
+        run_immediately=False
+    )
+    
+    background_task_manager.schedule_periodic(
+        "pool_monitor",
+        connection_pool_monitor,
+        interval_seconds=60,  # Every minute
+        run_immediately=False
+    )
+    
+    background_task_manager.schedule_periodic(
+        "event_monitor",
+        event_queue_monitor,
+        interval_seconds=30,  # Every 30 seconds
+        run_immediately=False
+    )
+    
+    # Start async event processing
+    await async_event_publisher.start_processing()
+    
+    logger.info("Background tasks started")
     
     yield
     
     # Shutdown
-    logger.info("Shutting down Matching Engine API...")
+    logger.info("Shutting down...")
+    
+    # Stop background tasks
+    await async_event_publisher.stop_processing()
+    await background_task_manager.stop()
+    
+    logger.info("Cleanup complete")
 
 
 # Create FastAPI application
@@ -102,6 +143,8 @@ async def system_status():
     """
     from ..matching_engine.cache import cache_manager
     from ..matching_engine.config.database import get_db_config
+    from ..matching_engine.utils.background_tasks import background_task_manager
+    from ..matching_engine.events.async_event_publisher import async_event_publisher
     
     cache_stats = cache_manager.get_stats()
     
@@ -111,6 +154,10 @@ async def system_status():
         pool_stats = db_config.get_pool_stats()
     except:
         pool_stats = {"error": "Database not initialized"}
+    
+    # Get background task stats
+    task_stats = background_task_manager.get_stats()
+    event_stats = async_event_publisher.get_stats()
     
     return {
         "status": "operational",
@@ -132,6 +179,18 @@ async def system_status():
             "active_connections": pool_stats.get("checked_out", 0),
             "idle_connections": pool_stats.get("checked_in", 0),
             "total_connections": pool_stats.get("total_connections", 0)
+        },
+        "background_tasks": {
+            "running": task_stats["running"],
+            "active_tasks": task_stats["active_tasks"],
+            "completed": task_stats["completed"],
+            "failed": task_stats["failed"]
+        },
+        "events": {
+            "published": event_stats["published"],
+            "processed": event_stats["processed"],
+            "queue_size": event_stats["queue_size"],
+            "running": event_stats["running"]
         }
     }
 
